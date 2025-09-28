@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Museum & Tourist Guide Bot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Markdown renderer -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- OGL for Threads background -->
+  <script src="https://cdn.jsdelivr.net/npm/ogl@0.0.32/dist/ogl.umd.js"></script>
+
+  <style>
+    :root { font-family: system-ui, Arial, sans-serif; }
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: linear-gradient(135deg, #0f172a, #1e293b, #0f172a);
+      color: #e2e8f0;
+    }
+
+    /* Background container */
+    #threads-bg {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: -1;
+    }
+
+    .app {
+      width: min(900px, 95vw);
+      background: rgba(30, 41, 59, 0.85); /* dark glass effect */
+      border-radius: 16px;
+      padding: 24px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 10px 40px rgba(0,0,0,.6);
+      margin: 2rem auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    h2 { margin-top: 0; text-align: center; color: #f8fafc; }
+
+    #chat {
+      height: 55vh;
+      overflow-y: auto;
+      padding: 12px;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.6);
+      color: #e2e8f0;
+    }
+
+    .msg {
+      margin: 12px 0;
+      line-height: 1.5;
+      padding: 10px;
+      border-radius: 8px;
+    }
+    .user {
+      background: rgba(34, 197, 94, 0.15);
+      border-left: 4px solid #22c55e;
+      color: #bbf7d0;
+    }
+    .bot {
+      background: rgba(59, 130, 246, 0.15);
+      border-left: 4px solid #3b82f6;
+      color: #bfdbfe;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid #475569;
+      background: #1e293b;
+      color: #f1f5f9;
+    }
+    input::placeholder { color: #94a3b8; }
+    button {
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 0;
+      cursor: pointer;
+      background: #3b82f6;
+      color: #fff;
+      transition: background 0.3s;
+    }
+    button:hover { background: #2563eb; }
+    button.sec { background: #64748b; }
+    button.sec:hover { background: #475569; }
+  </style>
+</head>
+<body>
+  <!-- Threads background -->
+  <div id="threads-bg"></div>
+
+  <!-- Chatbot -->
+  <div class="app">
+    <h2>🎨 Museum & Tourist Guide Bot</h2>
+    <div id="chat"></div>
+
+    <div class="row">
+      <input id="userInput" type="text" placeholder="Ask about exhibits, history, tips..." />
+      <button onclick="sendMsg()">Send</button>
+      <button class="sec" onclick="startSpeech()">🎤 Speak</button>
+    </div>
+  </div>
+
+  <script>
+    const chat = document.getElementById("chat");
+    const input = document.getElementById("userInput");
+
+    function addMessage(text, cls, isMarkdown=false) {
+      const div = document.createElement("div");
+      div.className = "msg " + cls;
+      div.innerHTML = isMarkdown ? marked.parse(text) : text;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    async function sendMsg() {
+      const q = input.value.trim();
+      if (!q) return;
+      addMessage("You: " + q, "user");
+      input.value = "";
+      try {
+        const res = await fetch("/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: q })
+        });
+        const data = await res.json();
+        addMessage(data.answer, "bot", true); // render markdown
+      } catch (e) {
+        addMessage("Bot: (network error)", "bot");
+      }
+    }
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") sendMsg();
+    });
+
+    function startSpeech() {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) {
+        addMessage("Bot: Speech recognition not supported in this browser.", "bot");
+        return;
+      }
+      const recog = new SR();
+      recog.lang = "en-US";
+      recog.continuous = false;
+      recog.interimResults = false;
+
+      recog.onstart = () => addMessage("🎤 Listening...", "bot");
+      recog.onerror = () => addMessage("Bot: Mic error or permission denied.", "bot");
+      recog.onresult = (evt) => {
+        const transcript = evt.results[0][0].transcript;
+        input.value = transcript;
+        sendMsg();
+      };
+      recog.start();
+    }
+  </script>
+
+  <!-- Threads animation script -->
+  <script>
+    const { Renderer, Program, Mesh, Triangle, Color } = OGL;
+
+    const vertexShader = `
+      attribute vec2 position;
+      attribute vec2 uv;
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = vec4(position, 0.0, 1.0);
+      }
+    `;
+
+    const fragmentShader = ` /* keep your full shader code here */ `;
+
+    function initThreads() {
+      const container = document.getElementById("threads-bg");
+      const renderer = new Renderer({ alpha: true });
+      const gl = renderer.gl;
+      gl.clearColor(0, 0, 0, 0);
+      container.appendChild(gl.canvas);
+
+      const geometry = new Triangle(gl);
+      const program = new Program(gl, {
+        vertex: vertexShader,
+        fragment: fragmentShader,
+        uniforms: {
+          iTime: { value: 0 },
+          iResolution: { value: new Color(1, 1, 1) },
+          uColor: { value: new Color(0.3, 0.7, 1) }, // cyan-blue lines
+          uAmplitude: { value: 1 },
+          uDistance: { value: 0 },
+          uMouse: { value: new Float32Array([0.5, 0.5]) }
+        }
+      });
+      const mesh = new Mesh(gl, { geometry, program });
+
+      function resize() {
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        program.uniforms.iResolution.value.set(
+          container.clientWidth,
+          container.clientHeight,
+          container.clientWidth / container.clientHeight
+        );
+      }
+      window.addEventListener("resize", resize);
+      resize();
+
+      function update(t) {
+        program.uniforms.iTime.value = t * 0.001;
+        renderer.render({ scene: mesh });
+        requestAnimationFrame(update);
+      }
+      requestAnimationFrame(update);
+    }
+
+    window.onload = initThreads;
+  </script>
+</body>
+</html>
